@@ -17,6 +17,6 @@ fi
 
 echo "Installing binary"
 "${INSTALL}" -d -m 755 ${INSTALL_OWNER} "${INSTALL_PREFIX}${BINDIR}" | exit 1
-"${INSTALL}" -m 755 ${INSTALL_OWNER} target/release/meshroute "${INSTALL_PREFIX}${BINDIR}" | exit 1
+"${INSTALL}" -m 755 ${INSTALL_OWNER} target/release/cratelist "${INSTALL_PREFIX}${BINDIR}" | exit 1
 
 echo "Installation successful"
