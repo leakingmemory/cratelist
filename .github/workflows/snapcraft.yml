@@ -1,0 +1,24 @@
+name: Build & Release Snap
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  snap:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Snapcraft
+        uses: snapcore/action-build@v1
+
+      - name: Upload to Snap Store
+        env:
+          SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_LOGIN }}
+        run: |
+          snapcraft upload cratelist_*.snap --release=edge

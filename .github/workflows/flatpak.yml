@@ -1,0 +1,88 @@
+name: Build & Upload Flatpak
+
+on:
+  workflow_run:
+    workflows: ["Release"]
+    types:
+      - completed
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    outputs:
+      tag: ${{ steps.vars.outputs.tag }}
+      version: ${{ steps.vars.outputs.version }}
+
+    env:
+      APP_ID: org.radiotube.cratelist
+      MANIFEST: flatpak/flatpak.json
+      ARCH: x86_64
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_branch }}
+          fetch-depth: 0
+
+      - name: Set VERSION from tag
+        id: vars
+        run: |
+          # Securely extract the tag name from the checked-out state
+          TAG=$(git describe --tags --exact-match)
+          VERSION="${TAG#v}"
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "TAG=${TAG}" >> $GITHUB_ENV
+          echo "VERSION=${VERSION}" >> $GITHUB_ENV
+
+      - name: Install Flatpak tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get -y install flatpak flatpak-builder python3
+          flatpak remote-add --user --if-not-exists \
+                 flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user -y org.freedesktop.Sdk/x86_64/25.08
+          flatpak install --user -y org.freedesktop.Platform/x86_64/25.08
+          flatpak install --user -y org.freedesktop.Sdk.Extension.rust-stable/x86_64/25.08
+
+      - name: Build with flatpak-builder
+        run: |
+          flatpak-builder \
+            --user --disable-rofiles-fuse \
+            --repo=repo build-dir "${MANIFEST}"
+
+      - name: Create bundle
+        run: |
+          flatpak build-bundle repo "${APP_ID}-${VERSION}.flatpak" "${APP_ID}" \
+                 --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo \
+                 --arch=${ARCH}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: flatpak-bundle
+          path: "*.flatpak"
+
+  upload:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: flatpak-bundle
+
+      - name: Upload .flatpak to release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ needs.build.outputs.tag }}
+          files: "*.flatpak"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
