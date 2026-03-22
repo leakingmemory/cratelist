@@ -1,0 +1,80 @@
+name: Update Dependency Licenses
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'Cargo.lock'
+
+jobs:
+  generate-license:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build tool
+        run: cargo build -r
+
+      - name: Generate DEPENDENCIES_LICENSE
+        run: |
+          # The registry source directory name is non-deterministic (includes a hash)
+          CRATES_DIR=$(ls -d "${HOME}/.cargo/registry/src/index.crates.io-"* 2>/dev/null | head -n 1)
+          
+          if [ -z "$CRATES_DIR" ]; then
+              echo "Error: Could not find Cargo registry source directory" >&2
+              exit 1
+          fi
+          
+          echo "Using crates directory: $CRATES_DIR"
+          ./target/release/cratelist Cargo.lock --license-contents "$CRATES_DIR" > DEPENDENCIES_LICENSE
+
+      - name: Upload DEPENDENCIES_LICENSE
+        uses: actions/upload-artifact@v4
+        with:
+          name: license-file
+          path: DEPENDENCIES_LICENSE
+          retention-days: 1
+
+  commit-license:
+    needs: generate-license
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download DEPENDENCIES_LICENSE
+        uses: actions/download-artifact@v4
+        with:
+          name: license-file
+
+      - name: Commit and push changes
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add DEPENDENCIES_LICENSE
+          if ! git diff-index --quiet HEAD; then
+            git commit -m "chore: update DEPENDENCIES_LICENSE"
+            git push
+          else
+            echo "No changes to commit"
+          fi
