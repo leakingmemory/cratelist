@@ -137,7 +137,7 @@ fn main() {
             }
 
             let mut license = None;
-            let mut license_file_path = None;
+            let mut license_files = Vec::new(); // Stores (filename, content)
             let patterns = vec![
                 format!("{}-{}", pkg.name, pkg.version),
                 pkg.name.clone(),
@@ -151,29 +151,25 @@ fn main() {
                         if let Ok(cargo_toml) = toml::from_str::<CargoToml>(&toml_content) {
                             license = cargo_toml.package.license.clone().or(cargo_toml.package.license_file.clone());
                             if show_contents {
+                                let mut files_to_try = Vec::new();
                                 if let Some(ref lfile) = cargo_toml.package.license_file {
-                                    let lpath = crate_dir.join(lfile);
-                                    if lpath.exists() {
-                                        license_file_path = Some(lpath);
+                                    files_to_try.push(lfile.clone());
+                                }
+                                for common in &["LICENSE", "LICENSE-MIT", "LICENSE-APACHE", "COPYING", "UNLICENSE"] {
+                                    files_to_try.push(common.to_string());
+                                    for ext in &["txt", "md"] {
+                                        files_to_try.push(format!("{}.{}", common, ext));
                                     }
                                 }
-                                if license_file_path.is_none() {
-                                    // Try common license file names
-                                    for common in &["LICENSE", "LICENSE-MIT", "LICENSE-APACHE", "COPYING", "UNLICENSE"] {
-                                        let lpath = crate_dir.join(common);
-                                        if lpath.exists() {
-                                            license_file_path = Some(lpath);
-                                            break;
-                                        }
-                                        // Also try with common extensions
-                                        for ext in &["txt", "md"] {
-                                            let lpath_ext = crate_dir.join(format!("{}.{}", common, ext));
-                                            if lpath_ext.exists() {
-                                                license_file_path = Some(lpath_ext);
-                                                break;
+
+                                for lfile in files_to_try {
+                                    let lpath = crate_dir.join(&lfile);
+                                    if lpath.exists() {
+                                        if let Ok(content) = fs::read_to_string(&lpath) {
+                                            if !license_files.iter().any(|(f, _)| f == &lfile) {
+                                                license_files.push((lfile, content));
                                             }
                                         }
-                                        if license_file_path.is_some() { break; }
                                     }
                                 }
                             }
@@ -183,7 +179,7 @@ fn main() {
                 }
             }
 
-            if license.is_none() || (show_contents && license_file_path.is_none()) {
+            if license.is_none() || (show_contents && license_files.is_empty()) {
                 // Try to find a .crate file and extract Cargo.toml
                 let crate_name = format!("{}-{}.crate", pkg.name, pkg.version);
                 let crate_path = crates_dir.join(&crate_name);
@@ -209,25 +205,27 @@ fn main() {
                                         if show_contents {
                                             let mut files_to_try = Vec::new();
                                             if let Some(ref lfile) = cargo_toml.package.license_file {
-                                                files_to_try.push(if internal_prefix.is_empty() { lfile.clone() } else { format!("{}/{}", internal_prefix, lfile) });
+                                                files_to_try.push(lfile.clone());
                                             }
                                             for common in &["LICENSE", "LICENSE-MIT", "LICENSE-APACHE", "COPYING", "UNLICENSE"] {
-                                                let names = vec![common.to_string(), format!("{}.txt", common), format!("{}.md", common)];
-                                                for name in names {
-                                                    files_to_try.push(if internal_prefix.is_empty() { name } else { format!("{}/{}", internal_prefix, name) });
+                                                files_to_try.push(common.to_string());
+                                                for ext in &["txt", "md"] {
+                                                    files_to_try.push(format!("{}.{}", common, ext));
                                                 }
                                             }
 
-                                            for lfile_path in files_to_try {
+                                            for lfile in files_to_try {
+                                                let full_internal_path = if internal_prefix.is_empty() { lfile.clone() } else { format!("{}/{}", internal_prefix, lfile) };
                                                 let loutput = process::Command::new("tar")
-                                                    .args(&["-zOxf", crate_path.to_str().unwrap(), &lfile_path])
+                                                    .args(&["-zOxf", crate_path.to_str().unwrap(), &full_internal_path])
                                                     .output();
                                                 if let Ok(loutput) = loutput {
                                                     if loutput.status.success() {
-                                                        license_file_path = Some(PathBuf::from(lfile_path)); // Reuse PathBuf as a marker for found file in tar
-                                                        // Actually we need the content here.
-                                                        // Let's store the content if we are in show_contents mode.
-                                                        break;
+                                                        if let Ok(content) = String::from_utf8(loutput.stdout) {
+                                                            if !license_files.iter().any(|(f, _)| f == &lfile) {
+                                                                license_files.push((lfile, content));
+                                                            }
+                                                        }
                                                     }
                                                 }
                                             }
@@ -254,44 +252,26 @@ fn main() {
             }
 
             if show_contents {
-                let mut content = None;
-                if let Some(ref path) = license_file_path {
-                    if path.is_absolute() {
-                        content = fs::read_to_string(path).ok();
-                    } else {
-                        // It was from a tarball, we need to extract it again or we should have stored it.
-                        // Let's re-extract to keep logic simple for now, but better would be to store it.
-                        let crate_name = format!("{}-{}.crate", pkg.name, pkg.version);
-                        let crate_path = crates_dir.join(&crate_name);
-                        let output = process::Command::new("tar")
-                            .args(&["-zOxf", crate_path.to_str().unwrap(), path.to_str().unwrap()])
-                            .output();
-                        if let Ok(output) = output {
-                            if output.status.success() {
-                                content = String::from_utf8(output.stdout).ok();
-                            }
+                if !license_files.is_empty() {
+                    for (filename, content) in license_files {
+                        if let Err(e) = writeln!(io::stdout(), "================================================================================") {
+                            if e.kind() == io::ErrorKind::BrokenPipe { break; }
                         }
-                    }
-                }
-
-                if let Some(c) = content {
-                    if let Err(e) = writeln!(io::stdout(), "================================================================================") {
-                        if e.kind() == io::ErrorKind::BrokenPipe { break; }
-                    }
-                    if let Err(e) = writeln!(io::stdout(), "{}@{}: {}", pkg.name, pkg.version, license.as_deref().unwrap_or("Unknown")) {
-                        if e.kind() == io::ErrorKind::BrokenPipe { break; }
-                    }
-                    if let Err(e) = writeln!(io::stdout(), "--------------------------------------------------------------------------------") {
-                        if e.kind() == io::ErrorKind::BrokenPipe { break; }
-                    }
-                    if let Err(e) = writeln!(io::stdout(), "{}", c.trim()) {
-                        if e.kind() == io::ErrorKind::BrokenPipe { break; }
-                    }
-                    if let Err(e) = writeln!(io::stdout(), "================================================================================") {
-                        if e.kind() == io::ErrorKind::BrokenPipe { break; }
-                    }
-                    if let Err(e) = writeln!(io::stdout(), "") {
-                        if e.kind() == io::ErrorKind::BrokenPipe { break; }
+                        if let Err(e) = writeln!(io::stdout(), "{}@{}: {} ({})", pkg.name, pkg.version, license.as_deref().unwrap_or("Unknown"), filename) {
+                            if e.kind() == io::ErrorKind::BrokenPipe { break; }
+                        }
+                        if let Err(e) = writeln!(io::stdout(), "--------------------------------------------------------------------------------") {
+                            if e.kind() == io::ErrorKind::BrokenPipe { break; }
+                        }
+                        if let Err(e) = writeln!(io::stdout(), "{}", content.trim()) {
+                            if e.kind() == io::ErrorKind::BrokenPipe { break; }
+                        }
+                        if let Err(e) = writeln!(io::stdout(), "================================================================================") {
+                            if e.kind() == io::ErrorKind::BrokenPipe { break; }
+                        }
+                        if let Err(e) = writeln!(io::stdout(), "") {
+                            if e.kind() == io::ErrorKind::BrokenPipe { break; }
+                        }
                     }
                 } else {
                     if let Err(e) = writeln!(io::stderr(), "Warning: Could not find license file for {}@{}", pkg.name, pkg.version) {
