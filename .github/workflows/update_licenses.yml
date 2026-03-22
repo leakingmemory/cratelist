@@ -6,6 +6,7 @@ on:
       - master
     paths:
       - 'Cargo.lock'
+  workflow_dispatch:
 
 jobs:
   generate-license:

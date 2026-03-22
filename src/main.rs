@@ -155,10 +155,16 @@ fn main() {
                                 if let Some(ref lfile) = cargo_toml.package.license_file {
                                     files_to_try.push(lfile.clone());
                                 }
-                                for common in &["LICENSE", "LICENSE-MIT", "LICENSE-APACHE", "COPYING", "UNLICENSE"] {
+                                for common in &[
+                                    "LICENSE", "LICENSE-MIT", "LICENSE-APACHE", "COPYING", "UNLICENSE",
+                                    "COPYRIGHT", "COPYRIGHT-MIT", "COPYRIGHT-APACHE", "LICENCE", "LICENSE-0BSD",
+                                    "license-apache-2.0", "license-mit", "NOTICE", "NOTICES"
+                                ] {
                                     files_to_try.push(common.to_string());
-                                    for ext in &["txt", "md"] {
+                                    files_to_try.push(common.to_lowercase());
+                                    for ext in &["txt", "md", "markdown", "license"] {
                                         files_to_try.push(format!("{}.{}", common, ext));
+                                        files_to_try.push(format!("{}.{}", common.to_lowercase(), ext));
                                     }
                                 }
 
@@ -166,7 +172,20 @@ fn main() {
                                     let lpath = crate_dir.join(&lfile);
                                     if lpath.exists() {
                                         if let Ok(content) = fs::read_to_string(&lpath) {
-                                            if !license_files.iter().any(|(f, _)| f == &lfile) {
+                                            let basename = if let Some(dot_idx) = lfile.rfind('.') {
+                                                &lfile[..dot_idx]
+                                            } else {
+                                                &lfile
+                                            };
+
+                                            if !license_files.iter().any(|(f, _): &(String, String)| {
+                                                let existing_basename = if let Some(dot_idx) = f.rfind('.') {
+                                                    &f[..dot_idx]
+                                                } else {
+                                                    f
+                                                };
+                                                existing_basename == basename
+                                            }) {
                                                 license_files.push((lfile, content));
                                             }
                                         }
@@ -207,10 +226,16 @@ fn main() {
                                             if let Some(ref lfile) = cargo_toml.package.license_file {
                                                 files_to_try.push(lfile.clone());
                                             }
-                                            for common in &["LICENSE", "LICENSE-MIT", "LICENSE-APACHE", "COPYING", "UNLICENSE"] {
+                                            for common in &[
+                                                "LICENSE", "LICENSE-MIT", "LICENSE-APACHE", "COPYING", "UNLICENSE",
+                                                "COPYRIGHT", "COPYRIGHT-MIT", "COPYRIGHT-APACHE", "LICENCE", "LICENSE-0BSD",
+                                                "license-apache-2.0", "license-mit", "NOTICE", "NOTICES"
+                                            ] {
                                                 files_to_try.push(common.to_string());
-                                                for ext in &["txt", "md"] {
+                                                files_to_try.push(common.to_lowercase());
+                                                for ext in &["txt", "md", "markdown", "license"] {
                                                     files_to_try.push(format!("{}.{}", common, ext));
+                                                    files_to_try.push(format!("{}.{}", common.to_lowercase(), ext));
                                                 }
                                             }
 
@@ -222,7 +247,20 @@ fn main() {
                                                 if let Ok(loutput) = loutput {
                                                     if loutput.status.success() {
                                                         if let Ok(content) = String::from_utf8(loutput.stdout) {
-                                                            if !license_files.iter().any(|(f, _)| f == &lfile) {
+                                                            let basename = if let Some(dot_idx) = lfile.rfind('.') {
+                                                                &lfile[..dot_idx]
+                                                            } else {
+                                                                &lfile
+                                                            };
+
+                                                            if !license_files.iter().any(|(f, _): &(String, String)| {
+                                                                let existing_basename = if let Some(dot_idx) = f.rfind('.') {
+                                                                    &f[..dot_idx]
+                                                                } else {
+                                                                    f
+                                                                };
+                                                                existing_basename == basename
+                                                            }) {
                                                                 license_files.push((lfile, content));
                                                             }
                                                         }
@@ -254,6 +292,7 @@ fn main() {
             if show_contents {
                 if !license_files.is_empty() {
                     for (filename, content) in license_files {
+                        let content: String = content;
                         if let Err(e) = writeln!(io::stdout(), "================================================================================") {
                             if e.kind() == io::ErrorKind::BrokenPipe { break; }
                         }
