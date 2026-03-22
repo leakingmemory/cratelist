@@ -1,0 +1,39 @@
+{
+  "id": "org.radiotube.cratelist",
+  "runtime": "org.freedesktop.Platform",
+  "runtime-version": "25.08",
+  "sdk": "org.freedesktop.Sdk",
+  "sdk-extensions": [
+    "org.freedesktop.Sdk.Extension.rust-stable"
+  ],
+  "build-options": {
+    "append-path": "/usr/lib/sdk/rust-stable/bin"
+  },
+  "command": "cratelist",
+  "finish-args": [
+    "--filesystem=host"
+  ],
+  "modules": [
+    {
+      "name": "cratelist",
+      "buildsystem": "simple",
+      "build-commands": [
+        "cargo build --frozen --release",
+        "install -Dm755 target/release/cratelist \"${FLATPAK_DEST}/bin/cratelist\""
+      ],
+      "sources": [
+        {
+          "type": "dir",
+          "path": ".."
+        },
+        "cargo-sources.json",
+        {
+          "type": "inline",
+          "dest": ".cargo",
+          "dest-filename": "config.toml",
+          "contents": "[source.crates-io]\nreplace-with = \"vendored\"\n\n[source.vendored]\ndirectory = \"cargo/vendor\""
+        }
+      ]
+    }
+  ]
+}
