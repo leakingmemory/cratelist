@@ -1,7 +1,8 @@
 use clap::Parser;
+use flate2::read::GzDecoder;
 use serde::Deserialize;
 use std::fs;
-use std::io::{self, Write};
+use std::io::{self, Read, Write};
 use std::path::PathBuf;
 use std::process;
 
@@ -60,10 +61,17 @@ fn main() {
     if args.show_embedded_licenses {
         println!("PROJECT LICENSE");
         println!("===============");
-        println!("{}", include_str!("../LICENSE"));
+        println!("{}", include_str!("../LICENSE").trim());
         println!("\nDEPENDENCY LICENSES");
         println!("===================");
-        println!("{}", include_str!("../DEPENDENCIES_LICENSE"));
+        let compressed_deps_license = include_bytes!("../DEPENDENCIES_LICENSE.gz");
+        let mut decoder = GzDecoder::new(&compressed_deps_license[..]);
+        let mut deps_license = String::new();
+        if let Err(e) = decoder.read_to_string(&mut deps_license) {
+            eprintln!("Error decompressing dependency licenses: {}", e);
+            process::exit(1);
+        }
+        println!("{}", deps_license.trim());
         return;
     }
 

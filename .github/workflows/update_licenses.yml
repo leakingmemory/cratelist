@@ -46,12 +46,18 @@ jobs:
           
           echo "Using crates directory: $CRATES_DIR"
           ./target/release/cratelist Cargo.lock --license-contents "$CRATES_DIR" > DEPENDENCIES_LICENSE
+          
+          # Compress the license file to reduce binary size when embedded
+          # We keep both the plain text and compressed files
+          gzip -fk DEPENDENCIES_LICENSE
 
       - name: Upload DEPENDENCIES_LICENSE
         uses: actions/upload-artifact@v4
         with:
           name: license-file
-          path: DEPENDENCIES_LICENSE
+          path: |
+            DEPENDENCIES_LICENSE
+            DEPENDENCIES_LICENSE.gz
           retention-days: 1
 
   commit-license:
@@ -72,9 +78,9 @@ jobs:
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
-          git add DEPENDENCIES_LICENSE
+          git add DEPENDENCIES_LICENSE DEPENDENCIES_LICENSE.gz
           if ! git diff-index --quiet HEAD; then
-            git commit -m "chore: update DEPENDENCIES_LICENSE"
+            git commit -m "chore: update dependency licenses"
             git push
           else
             echo "No changes to commit"

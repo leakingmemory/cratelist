@@ -18,5 +18,9 @@ echo "Using crates directory: $CRATES_DIR"
 # We use the release binary we just built
 ./target/release/cratelist Cargo.lock --license-contents "$CRATES_DIR" > DEPENDENCIES_LICENSE
 
-echo "License contents for all dependencies have been compiled into DEPENDENCIES_LICENSE"
-echo "You can now commit this file to the repository."
+# Compress the license file to reduce binary size when embedded
+# We keep both the plain text and compressed files
+gzip -fk DEPENDENCIES_LICENSE
+
+echo "License contents for all dependencies have been compiled into DEPENDENCIES_LICENSE and compressed into DEPENDENCIES_LICENSE.gz"
+echo "You can now commit these files to the repository."
