@@ -28,6 +28,10 @@ struct Args {
     /// Print the embedded licenses of the project and its dependencies
     #[arg(short = 'L', long)]
     show_embedded_licenses: bool,
+
+    /// Use - (dash) as a version separator instead of @
+    #[arg(short = 'D', long)]
+    dash: bool,
 }
 
 #[derive(Deserialize)]
@@ -57,6 +61,8 @@ struct PackageMetadata {
 
 fn main() {
     let args = Args::parse();
+
+    let separator = if args.dash { "-" } else { "@" };
 
     if args.show_embedded_licenses {
         println!("PROJECT LICENSE");
@@ -304,7 +310,7 @@ fn main() {
                         if let Err(e) = writeln!(io::stdout(), "================================================================================") {
                             if e.kind() == io::ErrorKind::BrokenPipe { break; }
                         }
-                        if let Err(e) = writeln!(io::stdout(), "{}@{}: {} ({})", pkg.name, pkg.version, license.as_deref().unwrap_or("Unknown"), filename) {
+                        if let Err(e) = writeln!(io::stdout(), "{}{}{}: {} ({})", pkg.name, separator, pkg.version, license.as_deref().unwrap_or("Unknown"), filename) {
                             if e.kind() == io::ErrorKind::BrokenPipe { break; }
                         }
                         if let Err(e) = writeln!(io::stdout(), "--------------------------------------------------------------------------------") {
@@ -321,12 +327,12 @@ fn main() {
                         }
                     }
                 } else {
-                    if let Err(e) = writeln!(io::stderr(), "Warning: Could not find license file for {}@{}", pkg.name, pkg.version) {
+                    if let Err(e) = writeln!(io::stderr(), "Warning: Could not find license file for {}{}{}", pkg.name, separator, pkg.version) {
                          if e.kind() == io::ErrorKind::BrokenPipe { break; }
                     }
                 }
             } else {
-                if let Err(e) = writeln!(io::stdout(), "{}@{}: {}", pkg.name, pkg.version, license.unwrap_or_else(|| "Unknown".to_string())) {
+                if let Err(e) = writeln!(io::stdout(), "{}{}{}: {}", pkg.name, separator, pkg.version, license.unwrap_or_else(|| "Unknown".to_string())) {
                     if e.kind() == io::ErrorKind::BrokenPipe {
                         break;
                     }
@@ -338,7 +344,7 @@ fn main() {
     } else {
         for pkg in packages {
             if pkg.source.is_some() {
-                if let Err(e) = writeln!(io::stdout(), "{}@{}", pkg.name, pkg.version) {
+                if let Err(e) = writeln!(io::stdout(), "{}{}{}", pkg.name, separator, pkg.version) {
                     if e.kind() == io::ErrorKind::BrokenPipe {
                         break;
                     }
