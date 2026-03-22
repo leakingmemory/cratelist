@@ -1,0 +1,28 @@
+name: cratelist
+base: core22
+version: '0.1.0'
+summary: A tool to list and manage Cargo dependencies
+description: |
+  cratelist is a command-line utility for working with Rust projects.
+  It can list dependencies from Cargo.lock, manage local crate caches,
+  and extract license information from crates and .crate files.
+  It also supports generating Flatpak source lists.
+
+grade: stable
+confinement: strict
+
+apps:
+  cratelist:
+    command: bin/cratelist
+    plugs:
+      - home
+      - removable-media
+
+parts:
+  cratelist:
+    plugin: rust
+    source: .
+    rust-channel: stable
+    stage-packages:
+      - tar
+      - gzip
