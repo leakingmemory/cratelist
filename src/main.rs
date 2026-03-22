@@ -32,6 +32,10 @@ struct Args {
     /// Use - (dash) as a version separator instead of @
     #[arg(short = 'D', long)]
     dash: bool,
+
+    /// Generate Flatpak cargo-sources.json format to stdout
+    #[arg(short = 'F', long)]
+    flatpak: bool,
 }
 
 #[derive(Deserialize)]
@@ -45,6 +49,27 @@ struct Package {
     name: String,
     version: String,
     source: Option<String>,
+    checksum: Option<String>,
+}
+
+#[derive(serde::Serialize)]
+#[serde(tag = "type")]
+enum FlatpakSource {
+    #[serde(rename = "archive")]
+    Archive {
+        #[serde(rename = "archive-type")]
+        archive_type: String,
+        url: String,
+        sha256: String,
+        dest: String,
+    },
+    #[serde(rename = "inline")]
+    Inline {
+        contents: String,
+        dest: String,
+        #[serde(rename = "dest-filename")]
+        dest_filename: String,
+    },
 }
 
 #[derive(Deserialize)]
@@ -102,6 +127,35 @@ fn main() {
             return;
         }
     };
+
+    if args.flatpak {
+        let mut sources = Vec::new();
+        for pkg in packages {
+            if let Some(checksum) = pkg.checksum {
+                // Archive source
+                sources.push(FlatpakSource::Archive {
+                    archive_type: "tar-gzip".to_string(),
+                    url: format!("https://static.crates.io/crates/{}/{}-{}.crate", pkg.name, pkg.name, pkg.version),
+                    sha256: checksum.clone(),
+                    dest: format!("cargo/vendor/{}-{}", pkg.name, pkg.version),
+                });
+                // Inline checksum source
+                sources.push(FlatpakSource::Inline {
+                    contents: format!("{{\"package\": \"{}\", \"files\": {{}}}}", checksum),
+                    dest: format!("cargo/vendor/{}-{}", pkg.name, pkg.version),
+                    dest_filename: ".cargo-checksum.json".to_string(),
+                });
+            }
+        }
+        match serde_json::to_string_pretty(&sources) {
+            Ok(json) => println!("{}", json),
+            Err(e) => {
+                eprintln!("Error generating JSON: {}", e);
+                process::exit(1);
+            }
+        }
+        return;
+    }
 
     if let Some(delete_dir) = args.delete {
         if !delete_dir.is_dir() {

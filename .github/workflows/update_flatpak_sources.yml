@@ -1,0 +1,74 @@
+name: Update Flatpak Sources
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'Cargo.lock'
+  workflow_dispatch:
+
+jobs:
+  generate-flatpak-sources:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-flatpak-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build tool
+        run: cargo build -r
+
+      - name: Generate cargo-sources.json
+        run: |
+          mkdir -p flatpak
+          ./target/release/cratelist Cargo.lock --flatpak > flatpak/cargo-sources.json
+
+      - name: Upload cargo-sources.json
+        uses: actions/upload-artifact@v4
+        with:
+          name: flatpak-sources
+          path: flatpak/cargo-sources.json
+          retention-days: 1
+
+  commit-flatpak-sources:
+    needs: generate-flatpak-sources
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download cargo-sources.json
+        uses: actions/download-artifact@v4
+        with:
+          name: flatpak-sources
+          path: flatpak/
+
+      - name: Commit and push changes
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add flatpak/cargo-sources.json
+          if ! git diff-index --quiet HEAD; then
+            git commit -m "chore: update flatpak cargo-sources.json"
+            git push
+          else
+            echo "No changes to commit"
+          fi
