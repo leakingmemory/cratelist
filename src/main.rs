@@ -9,8 +9,8 @@ use std::process;
 #[command(author, version, about, long_about = None)]
 struct Args {
     /// Path to the Cargo.lock file
-    #[arg(required = true)]
-    lock_path: String,
+    #[arg(required_unless_present = "show_embedded_licenses")]
+    lock_path: Option<String>,
 
     /// Delete all listed crates from the specified directory
     #[arg(short, long)]
@@ -23,6 +23,10 @@ struct Args {
     /// Show the contents of license files for all dependencies (requires directory path)
     #[arg(short = 'C', long)]
     license_contents: Option<PathBuf>,
+
+    /// Print the embedded licenses of the project and its dependencies
+    #[arg(short = 'L', long)]
+    show_embedded_licenses: bool,
 }
 
 #[derive(Deserialize)]
@@ -53,7 +57,17 @@ struct PackageMetadata {
 fn main() {
     let args = Args::parse();
 
-    let lock_path = &args.lock_path;
+    if args.show_embedded_licenses {
+        println!("PROJECT LICENSE");
+        println!("===============");
+        println!("{}", include_str!("../LICENSE"));
+        println!("\nDEPENDENCY LICENSES");
+        println!("===================");
+        println!("{}", include_str!("../DEPENDENCIES_LICENSE"));
+        return;
+    }
+
+    let lock_path = args.lock_path.as_ref().unwrap();
     let content = fs::read_to_string(lock_path).unwrap_or_else(|err| {
         eprintln!("Error reading file {}: {}", lock_path, err);
         process::exit(1);
