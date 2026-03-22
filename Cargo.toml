@@ -2,6 +2,8 @@
 name = "cratelist"
 version = "0.1.0"
 edition = "2024"
+license = "MIT"
+license-file = "LICENSE"
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
