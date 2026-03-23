@@ -487,10 +487,7 @@ fn main() {
                                                         if internal_prefix.is_empty() {
                                                             lfile.clone()
                                                         } else {
-                                                            format!(
-                                                                "{}/{}",
-                                                                internal_prefix, lfile
-                                                            )
+                                                            format!("{}/{}", internal_prefix, lfile)
                                                         };
                                                     let loutput = process::Command::new("tar")
                                                         .args(&[
@@ -504,15 +501,14 @@ fn main() {
                                                             if let Ok(content) =
                                                                 String::from_utf8(loutput.stdout)
                                                             {
-                                                                let basename = if let Some(
-                                                                    dot_idx,
-                                                                ) =
-                                                                    lfile.rfind('.')
-                                                                {
-                                                                    &lfile[..dot_idx]
-                                                                } else {
-                                                                    &lfile
-                                                                };
+                                                                let basename =
+                                                                    if let Some(dot_idx) =
+                                                                        lfile.rfind('.')
+                                                                    {
+                                                                        &lfile[..dot_idx]
+                                                                    } else {
+                                                                        &lfile
+                                                                    };
 
                                                                 if !license_files.iter().any(
                                                                     |(f, _): &(String, String)| {
