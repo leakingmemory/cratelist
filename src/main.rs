@@ -232,10 +232,18 @@ fn main() {
                                 if let Some(ref lfile) = cargo_toml.package.license_file {
                                     files_to_try.push(lfile.clone());
                                 }
+                                let mut fallbacks = Vec::new();
                                 for common in &[
                                     "LICENSE",
                                     "LICENSE-MIT",
                                     "LICENSE-APACHE",
+                                    "LICENSE-APACHE-2.0",
+                                    "LICENSE-GPL",
+                                    "LICENSE-LGPL",
+                                    "LICENSE-BSD",
+                                    "LICENSE-ZLIB",
+                                    "LICENSE-CC0",
+                                    "LICENSE-MPL",
                                     "COPYING",
                                     "UNLICENSE",
                                     "COPYRIGHT",
@@ -253,6 +261,19 @@ fn main() {
                                     for ext in &["txt", "md", "markdown", "license"] {
                                         files_to_try.push(format!("{}.{}", common, ext));
                                         files_to_try.push(format!(
+                                            "{}.{}",
+                                            common.to_lowercase(),
+                                            ext
+                                        ));
+                                    }
+                                }
+
+                                for common in &["AUTHORS"] {
+                                    fallbacks.push(common.to_string());
+                                    fallbacks.push(common.to_lowercase());
+                                    for ext in &["txt", "md", "markdown", "license"] {
+                                        fallbacks.push(format!("{}.{}", common, ext));
+                                        fallbacks.push(format!(
                                             "{}.{}",
                                             common.to_lowercase(),
                                             ext
@@ -282,6 +303,36 @@ fn main() {
                                                 },
                                             ) {
                                                 license_files.push((lfile, content));
+                                            }
+                                        }
+                                    }
+                                }
+
+                                if license_files.is_empty() {
+                                    for lfile in fallbacks {
+                                        let lpath = crate_dir.join(&lfile);
+                                        if lpath.exists() {
+                                            if let Ok(content) = fs::read_to_string(&lpath) {
+                                                let basename =
+                                                    if let Some(dot_idx) = lfile.rfind('.') {
+                                                        &lfile[..dot_idx]
+                                                    } else {
+                                                        &lfile
+                                                    };
+
+                                                if !license_files.iter().any(
+                                                    |(f, _): &(String, String)| {
+                                                        let existing_basename =
+                                                            if let Some(dot_idx) = f.rfind('.') {
+                                                                &f[..dot_idx]
+                                                            } else {
+                                                                f
+                                                            };
+                                                        existing_basename == basename
+                                                    },
+                                                ) {
+                                                    license_files.push((lfile, content));
+                                                }
                                             }
                                         }
                                     }
@@ -332,10 +383,18 @@ fn main() {
                                             {
                                                 files_to_try.push(lfile.clone());
                                             }
+                                            let mut fallbacks = Vec::new();
                                             for common in &[
                                                 "LICENSE",
                                                 "LICENSE-MIT",
                                                 "LICENSE-APACHE",
+                                                "LICENSE-APACHE-2.0",
+                                                "LICENSE-GPL",
+                                                "LICENSE-LGPL",
+                                                "LICENSE-BSD",
+                                                "LICENSE-ZLIB",
+                                                "LICENSE-CC0",
+                                                "LICENSE-MPL",
                                                 "COPYING",
                                                 "UNLICENSE",
                                                 "COPYRIGHT",
@@ -354,6 +413,19 @@ fn main() {
                                                     files_to_try
                                                         .push(format!("{}.{}", common, ext));
                                                     files_to_try.push(format!(
+                                                        "{}.{}",
+                                                        common.to_lowercase(),
+                                                        ext
+                                                    ));
+                                                }
+                                            }
+
+                                            for common in &["AUTHORS"] {
+                                                fallbacks.push(common.to_string());
+                                                fallbacks.push(common.to_lowercase());
+                                                for ext in &["txt", "md", "markdown", "license"] {
+                                                    fallbacks.push(format!("{}.{}", common, ext));
+                                                    fallbacks.push(format!(
                                                         "{}.{}",
                                                         common.to_lowercase(),
                                                         ext
@@ -403,6 +475,62 @@ fn main() {
                                                             ) {
                                                                 license_files
                                                                     .push((lfile, content));
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+
+                                            if license_files.is_empty() {
+                                                for lfile in fallbacks {
+                                                    let full_internal_path =
+                                                        if internal_prefix.is_empty() {
+                                                            lfile.clone()
+                                                        } else {
+                                                            format!(
+                                                                "{}/{}",
+                                                                internal_prefix, lfile
+                                                            )
+                                                        };
+                                                    let loutput = process::Command::new("tar")
+                                                        .args(&[
+                                                            "-zOxf",
+                                                            crate_path.to_str().unwrap(),
+                                                            &full_internal_path,
+                                                        ])
+                                                        .output();
+                                                    if let Ok(loutput) = loutput {
+                                                        if loutput.status.success() {
+                                                            if let Ok(content) =
+                                                                String::from_utf8(loutput.stdout)
+                                                            {
+                                                                let basename = if let Some(
+                                                                    dot_idx,
+                                                                ) =
+                                                                    lfile.rfind('.')
+                                                                {
+                                                                    &lfile[..dot_idx]
+                                                                } else {
+                                                                    &lfile
+                                                                };
+
+                                                                if !license_files.iter().any(
+                                                                    |(f, _): &(String, String)| {
+                                                                        let existing_basename =
+                                                                            if let Some(dot_idx) =
+                                                                                f.rfind('.')
+                                                                            {
+                                                                                &f[..dot_idx]
+                                                                            } else {
+                                                                                f
+                                                                            };
+                                                                        existing_basename
+                                                                            == basename
+                                                                    },
+                                                                ) {
+                                                                    license_files
+                                                                        .push((lfile, content));
+                                                                }
                                                             }
                                                         }
                                                     }
@@ -488,6 +616,41 @@ fn main() {
                         }
                     }
                 } else {
+                    let lic_name = license.as_deref().unwrap_or("Unknown");
+                    if let Err(e) = writeln!(
+                        io::stdout(),
+                        "================================================================================"
+                    ) {
+                        if e.kind() == io::ErrorKind::BrokenPipe {
+                            break;
+                        }
+                    }
+                    if let Err(e) = writeln!(
+                        io::stdout(),
+                        "{}{}{}: {} (No license file found)",
+                        pkg.name,
+                        separator,
+                        pkg.version,
+                        lic_name
+                    ) {
+                        if e.kind() == io::ErrorKind::BrokenPipe {
+                            break;
+                        }
+                    }
+                    if let Err(e) = writeln!(
+                        io::stdout(),
+                        "================================================================================"
+                    ) {
+                        if e.kind() == io::ErrorKind::BrokenPipe {
+                            break;
+                        }
+                    }
+                    if let Err(e) = writeln!(io::stdout(), "") {
+                        if e.kind() == io::ErrorKind::BrokenPipe {
+                            break;
+                        }
+                    }
+
                     if let Err(e) = writeln!(
                         io::stderr(),
                         "Warning: Could not find license file for {}{}{}",
@@ -501,13 +664,27 @@ fn main() {
                     }
                 }
             } else {
+                let lic_name = license.unwrap_or_else(|| "Unknown".to_string());
+                if lic_name == "Unknown" {
+                    if let Err(e) = writeln!(
+                        io::stderr(),
+                        "Warning: No license information found for {}{}{}",
+                        pkg.name,
+                        separator,
+                        pkg.version
+                    ) {
+                        if e.kind() == io::ErrorKind::BrokenPipe {
+                            // ignore
+                        }
+                    }
+                }
                 if let Err(e) = writeln!(
                     io::stdout(),
                     "{}{}{}: {}",
                     pkg.name,
                     separator,
                     pkg.version,
-                    license.unwrap_or_else(|| "Unknown".to_string())
+                    lic_name
                 ) {
                     if e.kind() == io::ErrorKind::BrokenPipe {
                         break;
