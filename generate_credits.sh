@@ -3,20 +3,31 @@
 # Build the tool in release mode
 cargo build -r || exit 1
 
-# Locate the crates source directory in ~/.cargo/registry/src/
-# We look for the index.crates.io-* directory
-CRATES_DIR=$(ls -d "${HOME}/.cargo/registry/src/index.crates.io-"* 2>/dev/null | head -n 1)
-
-if [ -z "$CRATES_DIR" ]; then
-    echo "Error: Could not find Cargo registry source directory in ~/.cargo/registry/src/" >&2
-    exit 1
-fi
-
-echo "Using crates directory: $CRATES_DIR"
+# Vendor all dependencies into ./vendor.
+#
+# We deliberately do NOT read ~/.cargo/registry/src/, because `cargo build`
+# only extracts sources for the host target. Platform-specific dependencies
+# (e.g. Windows-only crates) are listed in Cargo.lock but never appear there,
+# which previously produced bogus "No license file found" entries.
+#
+# `cargo vendor` materialises the full source (Cargo.toml + license files) of
+# *every* crate in Cargo.lock, for all platforms, into a single directory.
+# --versioned-dirs forces "<name>-<version>" naming, which matches the layout
+# cratelist expects.
+VENDOR_DIR="vendor"
+echo "Vendoring all dependencies into ${VENDOR_DIR}/ ..."
+cargo vendor --versioned-dirs --locked "$VENDOR_DIR" >/dev/null || exit 1
 
 # Generate the license contents for all dependencies
 # We use the release binary we just built
-./target/release/cratelist Cargo.lock --license-contents "$CRATES_DIR" > DEPENDENCIES_LICENSE
+./target/release/cratelist Cargo.lock --license-contents "$VENDOR_DIR" > DEPENDENCIES_LICENSE
+
+# A few crates legitimately ship without standard license files; those show up
+# as "No license file found". This is informational, not an error.
+if grep -q "No license file found" DEPENDENCIES_LICENSE; then
+    echo "Note: some dependencies lack standard license files:" >&2
+    grep "No license file found" DEPENDENCIES_LICENSE >&2
+fi
 
 # Compress the license file to reduce binary size when embedded
 # We keep both the plain text and compressed files
