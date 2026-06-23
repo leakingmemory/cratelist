@@ -6234,7 +6234,7 @@ END OF TERMS AND CONDITIONS
 ================================================================================
 
 ================================================================================
-serde_json@1.0.149: MIT OR Apache-2.0 (LICENSE-MIT)
+serde_json@1.0.150: MIT OR Apache-2.0 (LICENSE-MIT)
 --------------------------------------------------------------------------------
 Permission is hereby granted, free of charge, to any
 person obtaining a copy of this software and associated
@@ -6262,7 +6262,7 @@ DEALINGS IN THE SOFTWARE.
 ================================================================================
 
 ================================================================================
-serde_json@1.0.149: MIT OR Apache-2.0 (LICENSE-APACHE)
+serde_json@1.0.150: MIT OR Apache-2.0 (LICENSE-APACHE)
 --------------------------------------------------------------------------------
 Apache License
                         Version 2.0, January 2004
