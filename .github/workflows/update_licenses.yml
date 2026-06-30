@@ -90,6 +90,14 @@ jobs:
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           git add DEPENDENCIES_LICENSE DEPENDENCIES_LICENSE.gz
+          # If only the .gz file changed, skip the commit — gzip output is
+          # non-deterministic and nearly always differs even when the plain
+          # text content is identical.
+          changed=$(git diff --cached --name-only)
+          if [ "$changed" = "DEPENDENCIES_LICENSE.gz" ]; then
+            echo "Only DEPENDENCIES_LICENSE.gz changed, skipping commit"
+            exit 0
+          fi
           if ! git diff-index --quiet HEAD; then
             git commit -m "chore: update dependency licenses"
             for i in {1..5}; do
