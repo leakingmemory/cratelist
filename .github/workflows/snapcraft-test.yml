@@ -1,0 +1,19 @@
+name: Test building Snap
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'snap/snapcraft.yaml'
+
+permissions:
+  contents: read
+
+jobs:
+  snap:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Snapcraft
+        uses: snapcore/action-build@v1
